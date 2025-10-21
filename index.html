@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ninja Photo Booth</title>
   <style>
     body {
@@ -14,36 +14,22 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      height: 100vh;
+      min-height: 100vh;
       overflow: hidden;
       text-align: center;
     }
-
     h1 {
       font-size: 1.5rem;
       margin-bottom: 10px;
     }
-
     video, canvas {
       width: 90vw;
-      max-width: 480px;
+      max-width: 600px;
+      height: auto;
       border-radius: 16px;
-      box-shadow: 0 0 20px rgba(0, 0, 0, 0.6);
+      box-shadow: 0 0 20px rgba(0,0,0,0.6);
       background: black;
     }
-
-    #overlay {
-      position: absolute;
-      color: white;
-      font-size: 22px;
-      font-weight: bold;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      text-shadow: 2px 2px 5px black;
-      pointer-events: none;
-    }
-
     #controls {
       margin-top: 20px;
       display: flex;
@@ -51,7 +37,6 @@
       flex-wrap: wrap;
       justify-content: center;
     }
-
     button {
       font-size: 16px;
       padding: 12px 20px;
@@ -61,29 +46,24 @@
       color: white;
       transition: background 0.2s;
     }
-
     #snap { background: #00c853; }
     #retake { background: #ff3d00; }
     #share { background: #2979ff; }
-
-    button:active {
-      transform: scale(0.96);
-    }
-
+    button:active { transform: scale(0.96); }
   </style>
 </head>
 <body>
   <h1>📸 Ninja Photo Booth</h1>
+
   <div style="position: relative;">
     <video id="video" autoplay playsinline></video>
-    <canvas id="canvas" width="480" height="640" style="display:none;"></canvas>
-    <div id="overlay">@czech_ninja_1400</div>
+    <canvas id="canvas" style="display:none;"></canvas>
   </div>
 
   <div id="controls">
     <button id="snap">📷 Take Photo</button>
     <button id="retake" style="display:none;">🔁 Retake</button>
-    <button id="share" style="display:none;">📲 Share to Instagram</button>
+    <button id="share" style="display:none;">📲 Share to Instagram Stories</button>
   </div>
 
   <script>
@@ -94,10 +74,16 @@
     const share = document.getElementById("share");
     const ctx = canvas.getContext("2d");
 
-    // Request camera
+    // Get the camera stream and adapt to its size
     navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
       .then(stream => {
         video.srcObject = stream;
+        video.onloadedmetadata = () => {
+          video.play();
+          // Adapt the canvas to the video resolution
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+        };
       })
       .catch(err => {
         alert("Camera access denied or unavailable.");
@@ -106,13 +92,10 @@
 
     // Take photo
     snap.addEventListener("click", () => {
+      // Match canvas to current video frame size
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      ctx.font = "28px sans-serif";
-      ctx.fillStyle = "white";
-      ctx.textAlign = "center";
-      ctx.shadowColor = "black";
-      ctx.shadowBlur = 6;
-      ctx.fillText("@czech_ninja_1400", canvas.width / 2, canvas.height - 30);
 
       video.style.display = "none";
       canvas.style.display = "block";
@@ -130,38 +113,41 @@
       share.style.display = "none";
     });
 
-    // Share to Instagram Stories
+    // Share to Instagram Stories + Copy Handle
     share.addEventListener("click", async () => {
       try {
-        const dataUrl = canvas.toDataURL("image/png");
+        // 1️⃣ Copy your Instagram handle automatically
+        await navigator.clipboard.writeText("@czech_ninja_1400");
+        console.log("Instagram handle copied to clipboard!");
 
-        // Convert base64 to blob
+        // 2️⃣ Prepare the image for sharing
+        const dataUrl = canvas.toDataURL("image/png");
         const response = await fetch(dataUrl);
         const blob = await response.blob();
-        const file = new File([blob], "ninja_photo.png", { type: "image/png" });
-        const filesArray = [new ClipboardItem({ [file.type]: file })];
+        const file = new File([blob], "photo.png", { type: "image/png" });
 
-        // Try to use native Web Share (most mobile browsers)
+        // 3️⃣ Try native share first (Android Chrome, iOS Safari)
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           await navigator.share({
             files: [file],
-            title: "Share to Instagram",
-            text: "Captured with @czech_ninja_1400",
+            title: "Share to Instagram Stories"
           });
+          return;
+        }
+
+        // 4️⃣ Fallback: open Instagram Story camera directly
+        const ua = navigator.userAgent.toLowerCase();
+        if (/android/.test(ua)) {
+          window.location.href =
+            "intent://story_camera#Intent;package=com.instagram.android;scheme=instagram;end";
+        } else if (/iphone|ipad|ipod/.test(ua)) {
+          window.location.href = "instagram://story-camera";
         } else {
-          // Fallback: open Instagram Story camera intent
-          const userAgent = navigator.userAgent.toLowerCase();
-          if (/android/.test(userAgent)) {
-            window.location.href = "intent://story_camera#Intent;package=com.instagram.android;scheme=instagram;end";
-          } else if (/iphone|ipad|ipod/.test(userAgent)) {
-            window.location.href = "instagram://story-camera";
-          } else {
-            alert("Please open this link on your phone to share via Instagram Stories.");
-          }
+          alert("Please open this page on your phone to share via Instagram Stories.");
         }
       } catch (err) {
-        console.error("Share failed:", err);
-        alert("Could not share image. Please try again on your mobile device.");
+        console.error(err);
+        alert("Sharing failed. Please try again on your phone.");
       }
     });
   </script>
