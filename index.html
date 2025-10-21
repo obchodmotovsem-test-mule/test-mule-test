@@ -5,151 +5,301 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ninja Photo Booth</title>
   <style>
+    /* === STYLE SUMMARY ===
+       Red / white / black theme
+       Portrait layout
+       Flat minimal buttons
+       Analytics badge, gallery and fullscreen view
+    */
+
     body {
       margin: 0;
       font-family: system-ui, sans-serif;
-      background: #111;
-      color: white;
+      background: #000;
+      color: #fff;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      min-height: 100vh;
+      justify-content: flex-start;
+      height: 100vh;
       overflow: hidden;
       text-align: center;
     }
-    h1 {
-      font-size: 1.5rem;
-      margin-bottom: 10px;
-    }
+
     video, canvas {
       width: 90vw;
-      max-width: 600px;
-      height: auto;
+      max-width: 480px;
       border-radius: 16px;
-      box-shadow: 0 0 20px rgba(0,0,0,0.6);
-      background: black;
+      background: #000;
     }
+
     #controls {
-      margin-top: 20px;
       display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
       justify-content: center;
+      gap: 10px;
+      margin: 1rem 0;
     }
+
     button {
-      font-size: 16px;
-      padding: 12px 20px;
+      background: #e50914;
+      color: #fff;
       border: none;
       border-radius: 10px;
+      padding: 12px 20px;
+      font-size: 1rem;
       cursor: pointer;
-      color: white;
-      transition: background 0.2s;
     }
-    #snap { background: #00c853; }
-    #retake { background: #ff3d00; }
-    #share { background: #2979ff; }
-    button:active { transform: scale(0.96); }
+
+    /* Add your flash, race lights, and blurred fullscreen styles here */
   </style>
 </head>
 <body>
+
   <h1>📸 Ninja Photo Booth</h1>
 
-  <div style="position: relative;">
+  <div id="camera-container">
     <video id="video" autoplay playsinline></video>
     <canvas id="canvas" style="display:none;"></canvas>
+
+    <!-- Race-light countdown overlay -->
+    <div id="countdown-overlay"></div>
+    <!-- Flash overlay -->
+    <div id="flash-overlay"></div>
   </div>
 
+  <!-- Analytics badge -->
+  <div id="analytics-badge">📸 0</div>
+
+  <!-- Control buttons -->
   <div id="controls">
     <button id="snap">📷 Take Photo</button>
     <button id="retake" style="display:none;">🔁 Retake</button>
-    <button id="share" style="display:none;">📲 Share to Instagram Stories</button>
+    <button id="share" style="display:none;">📲 Share</button>
+  </div>
+
+  <!-- Gallery section -->
+  <div id="gallery"></div>
+
+  <!-- Fullscreen viewer -->
+  <div id="fullscreen-viewer" style="display:none;">
+    <img id="fullscreen-img" alt="preview"/>
+    <button id="close-view">✖</button>
+    <button id="share-fullscreen">📲 Share</button>
   </div>
 
   <script>
-    const video = document.getElementById("video");
-    const canvas = document.getElementById("canvas");
-    const snap = document.getElementById("snap");
-    const retake = document.getElementById("retake");
-    const share = document.getElementById("share");
-    const ctx = canvas.getContext("2d");
+   // ============================
+// Main Ninja Photo Booth Logic
+// ============================
 
-    // Get the camera stream and adapt to its size
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
-      .then(stream => {
-        video.srcObject = stream;
-        video.onloadedmetadata = () => {
-          video.play();
-          // Adapt the canvas to the video resolution
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-        };
-      })
-      .catch(err => {
-        alert("Camera access denied or unavailable.");
-        console.error(err);
-      });
+// Grab page elements
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const snap = document.getElementById("snap");
+const retake = document.getElementById("retake");
+const share = document.getElementById("share");
+const gallery = document.getElementById("gallery");
+const analyticsBadge = document.getElementById("analytics-badge");
+const countdownOverlay = document.getElementById("countdown-overlay");
+const flashOverlay = document.getElementById("flash-overlay");
+const fullscreen = document.getElementById("fullscreen-viewer");
+const fullscreenImg = document.getElementById("fullscreen-img");
+const closeView = document.getElementById("close-view");
+const shareFull = document.getElementById("share-fullscreen");
 
-    // Take photo
-    snap.addEventListener("click", () => {
-      // Match canvas to current video frame size
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+let ctx = canvas.getContext("2d");
+let photos = [];
+let currentPhoto = 0;
 
-      video.style.display = "none";
-      canvas.style.display = "block";
-      snap.style.display = "none";
-      retake.style.display = "inline-block";
-      share.style.display = "inline-block";
+// ============================
+// 1️⃣  Camera initialization
+// ============================
+async function initCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user" }
     });
+    video.srcObject = stream;
+    await video.play();
+    // Match canvas to camera feed
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+  } catch (err) {
+    alert("Camera access denied or unavailable.");
+    console.error(err);
+  }
+}
 
-    // Retake
-    retake.addEventListener("click", () => {
-      video.style.display = "block";
-      canvas.style.display = "none";
-      snap.style.display = "inline-block";
-      retake.style.display = "none";
-      share.style.display = "none";
-    });
+initCamera();
 
-    // Share to Instagram Stories + Copy Handle
-    share.addEventListener("click", async () => {
-      try {
-        // 1️⃣ Copy your Instagram handle automatically
-        await navigator.clipboard.writeText("@czech_ninja_1400");
-        console.log("Instagram handle copied to clipboard!");
+// ============================
+// 2️⃣ Countdown “race lights”
+// ============================
+function startCountdown() {
+  countdownOverlay.innerHTML = "";
+  countdownOverlay.style.display = "flex";
+  const lights = [0, 1, 2];
+  lights.forEach((_, i) => {
+    const light = document.createElement("div");
+    light.style.width = "25px";
+    light.style.height = "25px";
+    light.style.margin = "5px";
+    light.style.borderRadius = "50%";
+    light.style.background = "rgba(229, 9, 20, 0.3)";
+    countdownOverlay.appendChild(light);
+  });
 
-        // 2️⃣ Prepare the image for sharing
-        const dataUrl = canvas.toDataURL("image/png");
-        const response = await fetch(dataUrl);
-        const blob = await response.blob();
-        const file = new File([blob], "photo.png", { type: "image/png" });
-
-        // 3️⃣ Try native share first (Android Chrome, iOS Safari)
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            files: [file],
-            title: "Share to Instagram Stories"
-          });
-          return;
-        }
-
-        // 4️⃣ Fallback: open Instagram Story camera directly
-        const ua = navigator.userAgent.toLowerCase();
-        if (/android/.test(ua)) {
-          window.location.href =
-            "intent://story_camera#Intent;package=com.instagram.android;scheme=instagram;end";
-        } else if (/iphone|ipad|ipod/.test(ua)) {
-          window.location.href = "instagram://story-camera";
-        } else {
-          alert("Please open this page on your phone to share via Instagram Stories.");
-        }
-      } catch (err) {
-        console.error(err);
-        alert("Sharing failed. Please try again on your phone.");
+  const lightElements = countdownOverlay.children;
+  let step = 0;
+  const interval = setInterval(() => {
+    if (step < 3) {
+      lightElements[step].style.background = "#e50914";
+      step++;
+    } else {
+      // Turn all green
+      for (let i = 0; i < 3; i++) {
+        lightElements[i].style.background = "#00c853";
       }
-    });
+      clearInterval(interval);
+      // 1 second delay before capture
+      setTimeout(() => {
+        countdownOverlay.style.display = "none";
+        capturePhoto();
+      }, 1000);
+    }
+  }, 700);
+}
+
+// ============================
+// 3️⃣ Photo capture + flash
+// ============================
+function capturePhoto() {
+  // Flash effect
+  flashOverlay.style.opacity = "1";
+  setTimeout(() => (flashOverlay.style.opacity = "0"), 200);
+
+  // Haptic feedback
+  if (navigator.vibrate) navigator.vibrate(100);
+
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  video.style.display = "none";
+  canvas.style.display = "block";
+  snap.style.display = "none";
+  retake.style.display = "inline-block";
+  share.style.display = "inline-block";
+
+  // Save photo to gallery
+  const dataUrl = canvas.toDataURL("image/png");
+  photos.push(dataUrl);
+  analyticsBadge.textContent = `📸 ${photos.length}`;
+  addThumbnail(dataUrl);
+}
+
+// ============================
+// 4️⃣ Thumbnail + gallery
+// ============================
+function addThumbnail(dataUrl) {
+  const img = document.createElement("img");
+  img.src = dataUrl;
+  img.style.width = "60px";
+  img.style.height = "60px";
+  img.style.objectFit = "cover";
+  img.style.borderRadius = "8px";
+  img.style.margin = "4px";
+  img.addEventListener("click", () => openFullscreen(photos.indexOf(dataUrl)));
+  gallery.appendChild(img);
+}
+
+// ============================
+// 5️⃣ Fullscreen viewer
+// ============================
+function openFullscreen(index) {
+  currentPhoto = index;
+  fullscreenImg.src = photos[index];
+  fullscreen.style.display = "flex";
+  document.body.style.backdropFilter = "blur(10px)";
+}
+
+function closeFullscreen() {
+  fullscreen.style.display = "none";
+  document.body.style.backdropFilter = "none";
+}
+
+closeView.addEventListener("click", closeFullscreen);
+
+let touchStartX = 0;
+fullscreen.addEventListener("touchstart", e => {
+  touchStartX = e.touches[0].clientX;
+});
+fullscreen.addEventListener("touchend", e => {
+  const diff = e.changedTouches[0].clientX - touchStartX;
+  if (Math.abs(diff) > 50) {
+    currentPhoto =
+      diff < 0
+        ? (currentPhoto + 1) % photos.length
+        : (currentPhoto - 1 + photos.length) % photos.length;
+    fullscreenImg.src = photos[currentPhoto];
+  }
+});
+
+// ============================
+// 6️⃣ Share logic
+// ============================
+async function sharePhoto(dataUrl) {
+  try {
+    // Copy Instagram handle automatically
+    await navigator.clipboard.writeText("@czech_ninja_1400");
+
+    const response = await fetch(dataUrl);
+    const blob = await response.blob();
+    const file = new File([blob], "photo.png", { type: "image/png" });
+
+    // Web Share API first
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({
+        files: [file],
+        title: "Share to Instagram Stories"
+      });
+      return;
+    }
+
+    // Fallback intents
+    const ua = navigator.userAgent.toLowerCase();
+    if (/android/.test(ua)) {
+      window.location.href =
+        "intent://story_camera#Intent;package=com.instagram.android;scheme=instagram;end";
+    } else if (/iphone|ipad|ipod/.test(ua)) {
+      window.location.href = "instagram://story-camera";
+    } else {
+      alert("Please open this page on your phone to share via Instagram Stories.");
+    }
+  } catch (err) {
+    console.error(err);
+    alert("Sharing failed. Please try again on your phone.");
+  }
+}
+
+// ============================
+// 7️⃣ Event handlers
+// ============================
+snap.addEventListener("click", startCountdown);
+
+retake.addEventListener("click", () => {
+  video.style.display = "block";
+  canvas.style.display = "none";
+  snap.style.display = "inline-block";
+  retake.style.display = "none";
+  share.style.display = "none";
+});
+
+share.addEventListener("click", () => {
+  sharePhoto(canvas.toDataURL("image/png"));
+});
+
+shareFull.addEventListener("click", () => {
+  sharePhoto(photos[currentPhoto]);
+});
+
   </script>
 </body>
 </html>
