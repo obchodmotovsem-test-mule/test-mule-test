@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Photo Booth - Czech Ninja</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      background: #111;
+      color: white;
+    }
+    video, canvas {
+      border-radius: 12px;
+      max-width: 90vw;
+      margin-top: 20px;
+    }
+    #overlay {
+      position: absolute;
+      color: white;
+      font-size: 28px;
+      font-weight: bold;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      text-shadow: 2px 2px 5px black;
+    }
+    #controls {
+      margin-top: 20px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 18px;
+      margin: 10px;
+      cursor: pointer;
+      border: none;
+      border-radius: 5px;
+    }
+    #snap { background: #00c853; color: white; }
+    #download { background: #2979ff; color: white; }
+    #retake { background: #ff3d00; color: white; }
+  </style>
+</head>
+<body>
+  <h1>📸 Ninja Photo Booth</h1>
+  <video id="video" width="640" height="480" autoplay playsinline></video>
+  <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
+  <div id="overlay">@czech_ninja_1400</div>
+
+  <div id="controls">
+    <button id="snap">📷 Take Photo</button>
+    <button id="download" style="display:none;">⬇️ Download Photo</button>
+    <button id="retake" style="display:none;">🔁 Retake Photo</button>
+  </div>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const snap = document.getElementById('snap');
+    const download = document.getElementById('download');
+    const retake = document.getElementById('retake');
+    const ctx = canvas.getContext('2d');
+
+    // Get webcam stream
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => {
+        video.srcObject = stream;
+      })
+      .catch(err => {
+        alert('Camera access denied or unavailable.');
+        console.error(err);
+      });
+
+    // Take photo
+    snap.addEventListener('click', () => {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      ctx.font = "28px sans-serif";
+      ctx.fillStyle = "white";
+      ctx.textAlign = "center";
+      ctx.shadowColor = "black";
+      ctx.shadowBlur = 6;
+      ctx.fillText("@czech_ninja_1400", canvas.width / 2, canvas.height - 30);
+
+      // Toggle visibility
+      canvas.style.display = "block";
+      video.style.display = "none";
+      snap.style.display = "none";
+      download.style.display = "inline-block";
+      retake.style.display = "inline-block";
+    });
+
+    // Download photo
+    download.addEventListener('click', () => {
+      const link = document.createElement('a');
+      link.download = 'ninja_photo.png';
+      link.href = canvas.toDataURL();
+      link.click();
+    });
+
+    // Retake photo
+    retake.addEventListener('click', () => {
+      canvas.style.display = "none";
+      video.style.display = "block";
+      snap.style.display = "inline-block";
+      download.style.display = "none";
+      retake.style.display = "none";
+    });
+  </script>
+</body>
+</html>
