@@ -2,77 +2,110 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Photo Booth - Czech Ninja</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ninja Photo Booth</title>
   <style>
     body {
-      font-family: sans-serif;
-      text-align: center;
+      margin: 0;
+      font-family: system-ui, sans-serif;
       background: #111;
       color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+      text-align: center;
     }
+
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 10px;
+    }
+
     video, canvas {
-      border-radius: 12px;
-      max-width: 90vw;
-      margin-top: 20px;
+      width: 90vw;
+      max-width: 480px;
+      border-radius: 16px;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.6);
+      background: black;
     }
+
     #overlay {
       position: absolute;
       color: white;
-      font-size: 28px;
+      font-size: 22px;
       font-weight: bold;
-      bottom: 30px;
+      bottom: 20px;
       left: 50%;
       transform: translateX(-50%);
       text-shadow: 2px 2px 5px black;
+      pointer-events: none;
     }
+
     #controls {
       margin-top: 20px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
     }
+
     button {
-      padding: 10px 20px;
-      font-size: 18px;
-      margin: 10px;
-      cursor: pointer;
+      font-size: 16px;
+      padding: 12px 20px;
       border: none;
-      border-radius: 5px;
+      border-radius: 10px;
+      cursor: pointer;
+      color: white;
+      transition: background 0.2s;
     }
-    #snap { background: #00c853; color: white; }
-    #download { background: #2979ff; color: white; }
-    #retake { background: #ff3d00; color: white; }
+
+    #snap { background: #00c853; }
+    #retake { background: #ff3d00; }
+    #share { background: #2979ff; }
+
+    button:active {
+      transform: scale(0.96);
+    }
+
   </style>
 </head>
 <body>
   <h1>📸 Ninja Photo Booth</h1>
-  <video id="video" width="640" height="480" autoplay playsinline></video>
-  <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
-  <div id="overlay">@czech_ninja_1400</div>
+  <div style="position: relative;">
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas" width="480" height="640" style="display:none;"></canvas>
+    <div id="overlay">@czech_ninja_1400</div>
+  </div>
 
   <div id="controls">
     <button id="snap">📷 Take Photo</button>
-    <button id="download" style="display:none;">⬇️ Download Photo</button>
-    <button id="retake" style="display:none;">🔁 Retake Photo</button>
+    <button id="retake" style="display:none;">🔁 Retake</button>
+    <button id="share" style="display:none;">📲 Share to Instagram</button>
   </div>
 
   <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const snap = document.getElementById('snap');
-    const download = document.getElementById('download');
-    const retake = document.getElementById('retake');
-    const ctx = canvas.getContext('2d');
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const snap = document.getElementById("snap");
+    const retake = document.getElementById("retake");
+    const share = document.getElementById("share");
+    const ctx = canvas.getContext("2d");
 
-    // Get webcam stream
-    navigator.mediaDevices.getUserMedia({ video: true })
+    // Request camera
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
       .then(stream => {
         video.srcObject = stream;
       })
       .catch(err => {
-        alert('Camera access denied or unavailable.');
+        alert("Camera access denied or unavailable.");
         console.error(err);
       });
 
     // Take photo
-    snap.addEventListener('click', () => {
+    snap.addEventListener("click", () => {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       ctx.font = "28px sans-serif";
       ctx.fillStyle = "white";
@@ -81,29 +114,55 @@
       ctx.shadowBlur = 6;
       ctx.fillText("@czech_ninja_1400", canvas.width / 2, canvas.height - 30);
 
-      // Toggle visibility
-      canvas.style.display = "block";
       video.style.display = "none";
+      canvas.style.display = "block";
       snap.style.display = "none";
-      download.style.display = "inline-block";
       retake.style.display = "inline-block";
+      share.style.display = "inline-block";
     });
 
-    // Download photo
-    download.addEventListener('click', () => {
-      const link = document.createElement('a');
-      link.download = 'ninja_photo.png';
-      link.href = canvas.toDataURL();
-      link.click();
-    });
-
-    // Retake photo
-    retake.addEventListener('click', () => {
-      canvas.style.display = "none";
+    // Retake
+    retake.addEventListener("click", () => {
       video.style.display = "block";
+      canvas.style.display = "none";
       snap.style.display = "inline-block";
-      download.style.display = "none";
       retake.style.display = "none";
+      share.style.display = "none";
+    });
+
+    // Share to Instagram Stories
+    share.addEventListener("click", async () => {
+      try {
+        const dataUrl = canvas.toDataURL("image/png");
+
+        // Convert base64 to blob
+        const response = await fetch(dataUrl);
+        const blob = await response.blob();
+        const file = new File([blob], "ninja_photo.png", { type: "image/png" });
+        const filesArray = [new ClipboardItem({ [file.type]: file })];
+
+        // Try to use native Web Share (most mobile browsers)
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: "Share to Instagram",
+            text: "Captured with @czech_ninja_1400",
+          });
+        } else {
+          // Fallback: open Instagram Story camera intent
+          const userAgent = navigator.userAgent.toLowerCase();
+          if (/android/.test(userAgent)) {
+            window.location.href = "intent://story_camera#Intent;package=com.instagram.android;scheme=instagram;end";
+          } else if (/iphone|ipad|ipod/.test(userAgent)) {
+            window.location.href = "instagram://story-camera";
+          } else {
+            alert("Please open this link on your phone to share via Instagram Stories.");
+          }
+        }
+      } catch (err) {
+        console.error("Share failed:", err);
+        alert("Could not share image. Please try again on your mobile device.");
+      }
     });
   </script>
 </body>
